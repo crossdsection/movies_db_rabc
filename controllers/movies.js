@@ -129,6 +129,40 @@ module.exports = [
         },
     },
     {
+        method: 'DELETE',
+        path: '/movies/',
+        handler: async function(request, h){
+            let response = {error : 0, message: "Success!!", data: []};
+            let statusCode = 201;
+            try {
+                const movieTitle = request?.query?.title?.toLowerCase();
+                const releaseDate = request?.query?.release_date?.toLowerCase();
+                const deleteResult = await Movies.deleteOne({
+                    $and: [
+                        {
+                            title: { $regex: new RegExp(`.*${movieTitle}.*`), $options: "i" }
+                        },
+                        {
+                            release_date_ts: new Date(releaseDate).getTime()
+                        }
+                    ]
+                });
+                console.log('deleteResult==>', deleteResult);
+                if (deleteResult?.deletedCount > 0) {
+                    response.message = 'Deleted Successfully!'
+                } else {
+                    response.message = 'No Matching Movies!'
+                    statusCode = 404;
+                }
+            } catch (error) {
+                response.message = 'Something wrong happened at our end!!'
+                statusCode = 500;
+                console.log('Error==>', error);
+            }
+            return h.response(response).code(statusCode);   
+        }
+    },
+    {
         method: 'GET',
         path: '/movies/',
         handler: async function(request, h){
