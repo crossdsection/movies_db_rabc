@@ -1,6 +1,7 @@
 const Movies = require('../models/movies');
 const { stringSimilarity } = require('string-similarity-js');
 const { isArray } = require('lodash');
+const moment = require('moment');
 
 const filterCrewData = (crew) => {
     const crewObject = {};
@@ -22,6 +23,26 @@ const filterCrewData = (crew) => {
     return Object.values(crewObject);
 }
 
+const filterAccessControlData = (accessControlObj) => {
+    const accessControlFinalObj = {};
+    for (let index in accessControlObj) {
+        const value = accessControlObj[index];
+        const accessType = index.toLowerCase();
+        if (isArray(value)) {
+            accessControlFinalObj[accessType] = {
+                type: accessType,
+                values: value
+            }
+        } else {
+            accessControlFinalObj[accessType] = {
+                type: accessType,
+                values: [value]
+            }
+        }
+    }
+    return Object.values(accessControlFinalObj);
+}
+
 const filterMoviesData = (movies) => {
     let newMovies = [];
     const allowedKeys = ['title', 'description', 'release_date', 'genres', 'cast', 'crew', 'access_control']
@@ -37,6 +58,7 @@ const filterMoviesData = (movies) => {
             }
             newMovie[newKey] = movie[key];
             if (newKey == 'crew') newMovie[newKey] = filterCrewData(newMovie[newKey]);
+            if (newKey == 'access_control') newMovie[newKey] = filterAccessControlData(newMovie[newKey]);
         }
         newMovie.release_date_ts = new Date(newMovie?.release_date).getTime()
         newMovies.push(newMovie)
@@ -49,6 +71,8 @@ module.exports = [
         method: 'POST',
         path: '/movies/',
         handler: async function(request, h){
+            let response = {error : 0, message: "Success!!", data: []};
+            let statusCode = 201;
             try {
                 const movies = filterMoviesData(request.payload);
                 const findExistingMovies = {
@@ -95,10 +119,49 @@ module.exports = [
                 }
                 await Movies.bulkWrite(updateDataset);
                 await Movies.insertMany(insertDataset);
+                statusCode = 201;
             } catch (error) {
+                response.message = 'Something wrong happened at our end!!'
+                statusCode = 500;
                 console.log('Error==>', error);
             }
-            return h.response({error : 0, message: "Success!!", data: []}).code(201);
+            return h.response(response).code(statusCode);
         },
+    },
+    {
+        method: 'GET',
+        path: '/movies/',
+        handler: async function(request, h){
+            let response = {error : 0, message: "Success!!", data: []};
+            let statusCode = 201;
+            try {
+                const role = request?.query?.role?.toLowerCase();
+                const movies = await Movies.find({});
+                const filterMovieDataByRole = []
+                for (const movie of movies) {
+                    let filteredMovieData = {
+                        title: movie?.title,
+                        release_date: moment(movie?.release_date_ts).format('YYYY-MM-DD')
+                    };
+                    const accessControlFound = movie?.access_control.filter((accessControl) => stringSimilarity(role, accessControl?.type))?.[0];
+                    if (isArray(accessControlFound?.values)) {
+                        for (const key of accessControlFound?.values) {
+                            filteredMovieData[key] = movie[key]
+                        }
+                    }
+                    filterMovieDataByRole.push(filteredMovieData)
+                }
+                response = {
+                    error: 0,
+                    message: "Success!!",
+                    data: filterMovieDataByRole
+                }
+            } catch (error) {
+                response.message = 'Something wrong happened at our end!!'
+                statusCode = 500;
+                console.log('Error==>', error);
+            }
+            return h.response(response).code(statusCode);   
+        }
     }
 ]

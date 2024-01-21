@@ -20,6 +20,9 @@ const MoviesSchema = new Schema({
     },
     crew: {
         type: Array,
+    },
+    access_control: {
+        type: Array
     }
 }, {
     timestamps: true
